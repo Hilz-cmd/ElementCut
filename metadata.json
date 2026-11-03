@@ -1,0 +1,6 @@
+{
+  "name": "ElementCut",
+  "description": "Fast desktop video editor for vertical shorts with multi-track magnetic timeline, keyframing, and MP4 export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
