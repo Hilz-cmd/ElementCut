@@ -7,9 +7,18 @@ export async function generateSyntheticAudio(
   type: 'lofi' | 'trap' | 'whoosh',
   durationSeconds = 8
 ): Promise<string> {
+  const AudioCtxClass =
+    typeof window !== 'undefined'
+      ? window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext
+      : null;
+
+  if (!AudioCtxClass) {
+    return '';
+  }
+
   const sampleRate = 44100;
   const numFrames = Math.floor(sampleRate * durationSeconds);
-  const offlineCtx = new OfflineAudioContext(2, numFrames, sampleRate);
+  const offlineCtx = new AudioCtxClass(2, numFrames, sampleRate);
 
   if (type === 'lofi') {
     // Warm chords + lo-fi beat
@@ -319,7 +328,12 @@ export function createStickerSvg(type: 'fire' | 'lightning' | 'subscribe'): stri
  */
 export async function createInitialProject(): Promise<Track[]> {
   // Generate synthetic starter audio (instantaneous in memory)
-  const lofiAudioUrl = await generateSyntheticAudio('lofi', 10);
+  let lofiAudioUrl = '';
+  try {
+    lofiAudioUrl = await generateSyntheticAudio('lofi', 10);
+  } catch (e) {
+    console.warn('Initial synthetic audio skipped:', e);
+  }
   const fireSticker = createStickerSvg('fire');
 
   const textTrack: Track = {
