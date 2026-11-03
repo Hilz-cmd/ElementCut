@@ -21,6 +21,7 @@ import { Timeline } from './components/Timeline/Timeline';
 import { ExportModal } from './components/ExportModal';
 import { exportToMp4, ExportProgress } from './utils/exportMp4';
 import { evaluatePropertyAtTime, findKeyframeNear } from './utils/keyframeMath';
+import { getCachedMedia } from './utils/canvasRenderer';
 
 export default function App() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
@@ -74,29 +75,56 @@ export default function App() {
     setDuration(Math.ceil(maxEnd * 10) / 10);
   }, [tracks]);
 
-  // Synchronize audio elements with timeline playback
+  // Synchronize audio and video elements with timeline playback
   useEffect(() => {
     tracks.forEach((track) => {
       track.clips.forEach((clip) => {
-        if ((clip.type === 'audio' || clip.type === 'video') && clip.src) {
+        if (!clip.src) return;
+
+        const isClipActive = !track.isMuted && currentTime >= clip.start && currentTime < clip.start + clip.duration;
+        const clipRelativeTime = currentTime - clip.start;
+
+        if (clip.type === 'video') {
+          const videoEl = getCachedMedia(clip.src, 'video') as HTMLVideoElement;
+          if (videoEl) {
+            videoEl.muted = true; // Mute video element to prevent double audio and autoplay policy restrictions
+            const targetVideoTime = clip.sourceOffset + clipRelativeTime;
+
+            if (isPlaying && isClipActive) {
+              if (videoEl.readyState >= 1) {
+                if (Math.abs(videoEl.currentTime - targetVideoTime) > 0.2) {
+                  try { videoEl.currentTime = targetVideoTime; } catch (_) {}
+                }
+              }
+              if (videoEl.paused) {
+                videoEl.play().catch(() => {});
+              }
+            } else {
+              if (!videoEl.paused) {
+                videoEl.pause();
+              }
+              if (!isPlaying && videoEl.readyState >= 1 && Math.abs(videoEl.currentTime - targetVideoTime) > 0.05) {
+                try { videoEl.currentTime = targetVideoTime; } catch (_) {}
+              }
+            }
+          }
+        } else if (clip.type === 'audio') {
           let audioEl = activeAudioElements.current.get(clip.id);
           if (!audioEl) {
             audioEl = new Audio(clip.src);
+            audioEl.preload = 'auto';
             activeAudioElements.current.set(clip.id, audioEl);
           }
 
-          const isClipActive = !track.isMuted && currentTime >= clip.start && currentTime < clip.start + clip.duration;
-
           if (isPlaying && isClipActive) {
-            const clipRelativeTime = currentTime - clip.start;
             const targetAudioTime = clip.sourceOffset + clipRelativeTime;
-
-            // Sync volume keyframes
             const vol = evaluatePropertyAtTime(clip, 'volume', clipRelativeTime);
             audioEl.volume = Math.max(0, Math.min(1, vol));
 
-            if (Math.abs(audioEl.currentTime - targetAudioTime) > 0.15) {
-              audioEl.currentTime = targetAudioTime;
+            if (audioEl.readyState >= 1) {
+              if (Math.abs(audioEl.currentTime - targetAudioTime) > 0.2) {
+                try { audioEl.currentTime = targetAudioTime; } catch (_) {}
+              }
             }
 
             if (audioEl.paused) {
@@ -105,6 +133,10 @@ export default function App() {
           } else {
             if (!audioEl.paused) {
               audioEl.pause();
+            }
+            if (!isPlaying && audioEl.readyState >= 1) {
+              const targetAudioTime = clip.sourceOffset + clipRelativeTime;
+              try { audioEl.currentTime = targetAudioTime; } catch (_) {}
             }
           }
         }
@@ -149,6 +181,34 @@ export default function App() {
       }
     };
   }, [isPlaying, duration]);
+
+  // Master Play/Pause handler that primes audio and video playback within user gesture
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying((prev) => {
+      const willPlay = !prev;
+      if (willPlay) {
+        tracks.forEach((t) => {
+          t.clips.forEach((c) => {
+            if (c.src) {
+              if (c.type === 'video') {
+                const v = getCachedMedia(c.src, 'video') as HTMLVideoElement;
+                if (v) {
+                  v.muted = true;
+                  v.play().catch(() => {});
+                }
+              } else if (c.type === 'audio') {
+                const a = activeAudioElements.current.get(c.id);
+                if (a) {
+                  a.play().catch(() => {});
+                }
+              }
+            }
+          });
+        });
+      }
+      return willPlay;
+    });
+  }, [tracks]);
 
   // Find currently selected clip object
   const selectedClip = React.useMemo(() => {
@@ -626,7 +686,7 @@ export default function App() {
             currentTime={currentTime}
             duration={duration}
             isPlaying={isPlaying}
-            onPlayPause={() => setIsPlaying(!isPlaying)}
+            onPlayPause={handlePlayPause}
             onSeek={setCurrentTime}
             selectedClipId={selectedClipId}
             onSelectClip={setSelectedClipId}

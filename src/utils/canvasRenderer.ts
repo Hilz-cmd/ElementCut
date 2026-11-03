@@ -70,25 +70,29 @@ function renderProceduralBackground(
   time: number,
   name: string
 ) {
-  const grad = ctx.createLinearGradient(0, 0, width, height);
+  // Correct coordinate-space gradient from (-w/2, -h/2) to (w/2, h/2)
+  const grad = ctx.createLinearGradient(-width / 2, -height / 2, width / 2, height / 2);
   if (name.toLowerCase().includes('sunset')) {
-    grad.addColorStop(0, '#4c0519');
-    grad.addColorStop(0.5, '#9d174d');
+    grad.addColorStop(0, '#3b0764');
+    grad.addColorStop(0.3, '#701a75');
+    grad.addColorStop(0.6, '#be123c');
     grad.addColorStop(1, '#f59e0b');
   } else {
-    // Cyber / Neon dark theme
-    grad.addColorStop(0, '#0a0a14');
-    grad.addColorStop(0.5, '#1e1b4b');
-    grad.addColorStop(1, '#020617');
+    // Cyber / Neon dark futuristic backdrop
+    grad.addColorStop(0, '#020617');
+    grad.addColorStop(0.4, '#0f172a');
+    grad.addColorStop(0.8, '#1e1b4b');
+    grad.addColorStop(1, '#090d16');
   }
   ctx.fillStyle = grad;
   ctx.fillRect(-width / 2, -height / 2, width, height);
 
-  // Animated background grid lines
-  ctx.strokeStyle = 'rgba(99, 102, 241, 0.18)';
-  ctx.lineWidth = 2;
-  const gridSize = 60;
-  const offsetY = (time * 40) % gridSize;
+  // Animated dynamic perspective grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+  ctx.lineWidth = 1.5;
+  const gridSize = 50;
+  const offsetY = (time * 60) % gridSize;
 
   for (let x = -width / 2; x <= width / 2; x += gridSize) {
     ctx.beginPath();
@@ -103,18 +107,73 @@ function renderProceduralBackground(
     ctx.lineTo(width / 2, y);
     ctx.stroke();
   }
+  ctx.restore();
 
-  // Neon glowing sphere in center
+  // Floating animated particle sparks
   ctx.save();
-  const pulse = Math.sin(time * 3) * 15;
-  const radGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 180 + pulse);
-  radGrad.addColorStop(0, 'rgba(56, 189, 248, 0.6)');
-  radGrad.addColorStop(0.6, 'rgba(129, 140, 248, 0.2)');
+  for (let i = 0; i < 24; i++) {
+    const seed = i * 137.5;
+    const px = Math.sin(seed + time * 0.4) * (width * 0.42);
+    const py = (((seed * 31.7 + time * 120) % height) - height / 2);
+    const radius = 2 + (i % 3);
+    const opacity = 0.3 + 0.4 * Math.sin(time * 3 + i);
+
+    ctx.fillStyle = `rgba(147, 197, 253, ${opacity})`;
+    ctx.beginPath();
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Central glowing core with rotating cyber rings
+  ctx.save();
+  const pulse = Math.sin(time * 4) * 18;
+  const coreRadius = 90 + pulse;
+
+  const radGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, coreRadius);
+  radGrad.addColorStop(0, 'rgba(56, 189, 248, 0.7)');
+  radGrad.addColorStop(0.5, 'rgba(129, 140, 248, 0.25)');
   radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = radGrad;
   ctx.beginPath();
-  ctx.arc(0, 0, 180 + pulse, 0, Math.PI * 2);
+  ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
   ctx.fill();
+
+  // Rotating outer ring
+  ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, coreRadius * 0.75, time * 2, time * 2 + Math.PI * 1.4);
+  ctx.stroke();
+
+  // Counter-rotating inner ring
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, coreRadius * 0.5, -time * 2.5, -time * 2.5 + Math.PI * 1.2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Animated audio spectrum visualizer bars at the bottom
+  ctx.save();
+  const barCount = 28;
+  const barWidth = 8;
+  const spacing = 6;
+  const totalW = barCount * (barWidth + spacing);
+  const startX = -totalW / 2;
+  const bottomY = height * 0.38;
+
+  for (let b = 0; b < barCount; b++) {
+    const freq = 1.5 + (b % 5) * 0.8;
+    const waveHeight = (Math.sin(time * 8 + b * freq) * 0.5 + 0.5) * 60 + 10;
+    const bx = startX + b * (barWidth + spacing);
+
+    const barGrad = ctx.createLinearGradient(0, bottomY, 0, bottomY - waveHeight);
+    barGrad.addColorStop(0, '#2563eb');
+    barGrad.addColorStop(1, '#38bdf8');
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(bx, bottomY - waveHeight, barWidth, waveHeight);
+  }
   ctx.restore();
 }
 

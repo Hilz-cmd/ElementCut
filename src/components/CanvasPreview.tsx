@@ -50,19 +50,35 @@ export const CanvasPreview: React.FC<CanvasPreviewProps> = ({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Re-render canvas whenever currentTime, tracks, or resolution change
+  // Continuous rendering loop during playback so video frames refresh at display rate
   useEffect(() => {
+    let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Immediate draw on state changes (scrubbing, seeking, selection, property changes)
     renderCanvasFrame(ctx, resolution, tracks, currentTime, {
       showSafeZones,
       selectedClipId,
     });
-  }, [resolution, tracks, currentTime, showSafeZones, selectedClipId]);
+
+    if (isPlaying) {
+      const renderTick = () => {
+        renderCanvasFrame(ctx, resolution, tracks, currentTime, {
+          showSafeZones,
+          selectedClipId,
+        });
+        animId = requestAnimationFrame(renderTick);
+      };
+      animId = requestAnimationFrame(renderTick);
+    }
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [resolution, tracks, currentTime, isPlaying, showSafeZones, selectedClipId]);
 
   // Keyboard shortcut listener (Space = play/pause, Left/Right = frame step)
   useEffect(() => {
